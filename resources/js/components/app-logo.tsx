@@ -7,12 +7,15 @@ export default function AppLogo() {
 
     return (
         <>
-            <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-md">
-                <AppLogoIcon className="size-5 fill-current text-white dark:text-black" />
+            <div className="flex aspect-square size-8 items-center justify-center rounded-md bg-[#083e2c] text-emerald-100">
+                <AppLogoIcon className="size-5 fill-current text-emerald-100 dark:text-emerald-100" />
             </div>
-            <div className="ml-1 grid flex-1 text-left text-sm">
-                <span className="mb-0.5 truncate leading-tight font-semibold">
+            <div className="ml-1 grid flex-1 text-left text-xl font-semibold">
+                <span className="mb-0.5 truncate leading-tight font-semibold text-emerald-100">
                     {name}
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                    CHO of Tagum City
                 </span>
             </div>
         </>

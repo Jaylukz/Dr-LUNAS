@@ -7,7 +7,7 @@ import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Dr-LUNAS';
 
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
@@ -33,7 +33,6 @@ void createInertiaApp({
         const lowerName = name.toLowerCase();
         switch (true) {
             case lowerName === 'welcome':
-            case lowerName === 'dashboard':
                 return null;
             case lowerName.startsWith('auth/'):
                 return AuthLayout;

@@ -27,5 +27,9 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('dashboard');
     })->name('dashboard');
 
+    Route::get('/demand-forecasting', function () {
+        return Inertia::render('demandforecasting');
+    })->name('demand-forecasting');
+
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
