@@ -28,8 +28,12 @@ Route::middleware('auth')->group(function () {
     })->name('dashboard');
 
     Route::get('/demand-forecasting', function () {
-        return Inertia::render('demandforecasting');
+        return Inertia::render('demand-forecasting');
     })->name('demand-forecasting');
+
+    Route::get('/expiry-risk', function () {
+        return Inertia::render('expiry-risk');
+    })->name('expiry-risk');
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });

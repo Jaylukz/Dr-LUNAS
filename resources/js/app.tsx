@@ -20,7 +20,7 @@ void createInertiaApp({
 
     setup({ el, App, props }) {
         const root = createRoot(el);
-        
+
         root.render(
             <TooltipProvider delayDuration={0}>
                 <App {...props} />
@@ -33,6 +33,10 @@ void createInertiaApp({
         const lowerName = name.toLowerCase();
         switch (true) {
             case lowerName === 'welcome':
+            case lowerName === 'dashboard':
+            case lowerName === 'demand-forecasting':
+            case lowerName === 'expiry-risk':
+            case lowerName === 'expiryrisk':
                 return null;
             case lowerName.startsWith('auth/'):
                 return AuthLayout;

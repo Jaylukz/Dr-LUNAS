@@ -1,16 +1,15 @@
-import AppLayoutTemplate from '@/layouts/app/app-sidebar-layout';
-import type { BreadcrumbItem } from '@/types';
+// resources/js/layouts/app-layout.tsx
+import Sidebar from '@/components/sidebar'; 
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="dashboard-container">
+      {/* Custom Dr-LUNAS Sidebar */}
+      <Sidebar />
 
-export default function AppLayout({
-    breadcrumbs = [],
-    children,
-}: {
-    breadcrumbs?: BreadcrumbItem[];
-    children: React.ReactNode;
-}) {
-    return (
-        <AppLayoutTemplate breadcrumbs={breadcrumbs}>
-            {children}
-        </AppLayoutTemplate>
-    );
+      {/* Dynamic Main Content Wrapper */}
+      <div className="dashboard-main-wrapper">
+        {children}
+      </div>
+    </div>
+  );
 }
