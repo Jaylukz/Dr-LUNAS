@@ -14,7 +14,7 @@ export default function AppLogo() {
                 <span className="mb-0.5 truncate leading-tight font-semibold text-emerald-100">
                     {name}
                 </span>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                <span className="text-[10px] font-semibold tracking-[0.2em] text-emerald-200 uppercase">
                     CHO of Tagum City
                 </span>
             </div>

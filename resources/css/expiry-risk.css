@@ -2,94 +2,96 @@
 
 /* Color Variables & Theme Tokens */
 :root {
-  --bg-canvas: #e8fbeb;
-  --bg-surface: #ffffff;
-  --brand-primary: #012b1d;
-  --brand-hover: #065f46;
-  --border-card: #d1fae5;
-  
-  /* Status Colors */
-  --color-critical: #dc2626;
-  --color-at-risk: #d97706;
-  --color-safe: #16a34a;
-  --color-normal-bg: #e2e8f0;
-  --color-normal-text: #64748b;
-  --color-expired-text: #374151;
+    --bg-canvas: #e8fbeb;
+    --bg-surface: #ffffff;
+    --brand-primary: #012b1d;
+    --brand-hover: #065f46;
+    --border-card: #d1fae5;
+
+    /* Status Colors */
+    --color-critical: #dc2626;
+    --color-at-risk: #d97706;
+    --color-safe: #16a34a;
+    --color-normal-bg: #e2e8f0;
+    --color-normal-text: #64748b;
+    --color-expired-text: #374151;
 }
 
 /* Base Layout Container */
 .expiry-risk-container {
-  padding: 1.25rem 1.5rem;
-  background-color: var(--bg-canvas);
-  min-height: 100vh;
-  box-sizing: border-box;
+    padding: 1.25rem 1.5rem;
+    background-color: var(--bg-canvas);
+    min-height: 100vh;
+    box-sizing: border-box;
 }
 
 /* Card Containers (Stat Cards & Content Cards) */
 .expiry-stat-card,
 .expiry-card {
-  background-color: var(--bg-surface);
-  border-radius: 0.75rem;
-  border: 1px solid var(--border-card);
-  padding: 1.25rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    background-color: var(--bg-surface);
+    border-radius: 0.75rem;
+    border: 1px solid var(--border-card);
+    padding: 1.25rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    transition:
+        box-shadow 0.2s ease,
+        border-color 0.2s ease;
 }
 
 .expiry-stat-card:hover,
 .expiry-card:hover {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 /* Table Layout & Styling */
 .batch-register-table {
-  width: 100%;
-  text-align: left;
-  border-collapse: collapse;
-  font-size: 0.8125rem;
+    width: 100%;
+    text-align: left;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
 }
 
 .batch-register-table th {
-  padding: 0.875rem 1rem;
-  font-size: 0.65rem;
-  font-weight: 800;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid #e2e8f0;
-  background-color: #f8fafc;
+    padding: 0.875rem 1rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #e2e8f0;
+    background-color: #f8fafc;
 }
 
 .batch-register-table td {
-  padding: 1rem;
-  border-bottom: 1px solid #f1f5f9;
-  vertical-align: middle;
-  color: #334155;
+    padding: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    color: #334155;
 }
 
 .batch-register-table tbody tr {
-  transition: background-color 0.15s ease;
+    transition: background-color 0.15s ease;
 }
 
 .batch-register-table tbody tr:hover {
-  background-color: rgba(248, 250, 252, 0.8);
+    background-color: rgba(248, 250, 252, 0.8);
 }
 
 /* Custom Scrollbar for Responsive Table */
 .overflow-x-auto::-webkit-scrollbar {
-  height: 6px;
+    height: 6px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+    background: #f1f5f9;
+    border-radius: 4px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+    background: #cbd5e1;
+    border-radius: 4px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+    background: #94a3b8;
 }

@@ -5,6 +5,10 @@ import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 const pageTitles: Record<string, string> = {
     '/dashboard': 'Dashboard',
     '/demand-forecasting': 'Demand Forecasting',
+    '/expiry-risk': 'Expiry Risk',
+    '/procurement': 'Procurement',
+    '/stockmanagement': 'Stock Management',
+    '/reports': 'Reports',
 };
 
 export function AppSidebarHeader({
@@ -20,7 +24,7 @@ export function AppSidebarHeader({
             <div className="flex w-full items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                     <div>
-                        <h1 className="font-serif text-xl font-bold leading-none text-white">
+                        <h1 className="font-serif text-xl leading-none font-bold text-white">
                             {currentTitle}
                         </h1>
                     </div>

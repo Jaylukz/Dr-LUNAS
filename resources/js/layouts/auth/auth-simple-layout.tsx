@@ -1,9 +1,5 @@
 import type { AuthLayoutProps } from '@/types';
 
 export default function AuthSimpleLayout({ children }: AuthLayoutProps) {
-    return (
-        <div className="w-full min-h-screen">
-            {children}
-        </div>
-    );
+    return <div className="min-h-screen w-full">{children}</div>;
 }

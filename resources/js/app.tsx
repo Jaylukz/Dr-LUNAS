@@ -15,7 +15,7 @@ void createInertiaApp({
     resolve: (name) =>
         resolvePageComponent(
             `./pages/${name}.tsx`,
-            import.meta.glob('./pages/**/*.tsx')
+            import.meta.glob('./pages/**/*.tsx'),
         ),
 
     setup({ el, App, props }) {
@@ -25,7 +25,7 @@ void createInertiaApp({
             <TooltipProvider delayDuration={0}>
                 <App {...props} />
                 <Toaster />
-            </TooltipProvider>
+            </TooltipProvider>,
         );
     },
 

@@ -32,16 +32,16 @@ const navGroups = [
         label: 'Analytics',
         items: [
             { title: 'Dashboard', href: dashboard(), icon: LayoutGrid },
-            { title: 'Demand Forecasting', href: '/demand-forecasting', icon: TrendingUp },
-            { title: 'Expiry Risk', href: '#', icon: AlertTriangle },
+            {title: 'Demand Forecasting', href: '/demand-forecasting', icon: TrendingUp },
+            { title: 'Expiry Risk', href: '/expiry-risk', icon: AlertTriangle },
         ],
     },
     {
         label: 'Logistics',
         items: [
-            { title: 'Procurement', href: '#', icon: ClipboardList },
-            { title: 'Stock Management', href: '#', icon: Package },
-            { title: 'Reports', href: '#', icon: FileBarChart },
+            { title: 'Procurement', href: '/procurement', icon: ClipboardList },
+            {title: 'Stock Management', href: '/stockmanagement', icon: Package },
+            { title: 'Reports', href: '/reports', icon: FileBarChart },
         ],
     },
     {
@@ -67,11 +67,19 @@ export function AppSidebar() {
     };
 
     return (
-        <Sidebar collapsible="icon" variant="inset" className="border-[#083e2c] bg-[#012b1d] text-white">
+        <Sidebar
+            collapsible="icon"
+            variant="inset"
+            className="border-[#083e2c] bg-[#012b1d] text-white"
+        >
             <SidebarHeader className="border-b border-[#083e2c] bg-[#022C22] px-3 py-4">
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild className="text-white hover:bg-[#083e2c] hover:text-white">
+                        <SidebarMenuButton
+                            size="lg"
+                            asChild
+                            className="text-white hover:bg-[#083e2c] hover:text-white"
+                        >
                             <Link href={dashboard()} prefetch>
                                 <AppLogo />
                             </Link>
@@ -84,29 +92,54 @@ export function AppSidebar() {
                 {navGroups.map((group) => (
                     <SidebarGroup key={group.label} className="px-0 py-1">
                         <SidebarGroupLabel asChild>
-                            <button type="button" onClick={() => toggleGroup(group.label)} className="flex w-full items-center justify-between px-3 text-[11px] font-semibold uppercase tracking-wider text-emerald-200/50 hover:text-white">
+                            <button
+                                type="button"
+                                onClick={() => toggleGroup(group.label)}
+                                className="flex w-full items-center justify-between px-3 text-[11px] font-semibold tracking-wider text-emerald-200/50 uppercase hover:text-white"
+                            >
                                 <span>{group.label}</span>
-                                <Settings2 className={`size-3 transition-transform ${openGroups[group.label] ? 'rotate-90' : ''}`} />
+                                <Settings2
+                                    className={`size-3 transition-transform ${openGroups[group.label] ? 'rotate-90' : ''}`}
+                                />
                             </button>
                         </SidebarGroupLabel>
                         {openGroups[group.label] && (
                             <SidebarMenu>
                                 {group.items.map((item) => {
-                                    const isActive = item.href !== '#' && page.url === item.href;
+                                    const isActive =
+                                        item.href !== '#' &&
+                                        page.url === item.href;
                                     const Icon = item.icon;
 
                                     return (
                                         <SidebarMenuItem key={item.title}>
-                                            <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className="text-emerald-100/70 hover:bg-[#083e2c] hover:text-white data-[active=true]:bg-[#0d533d] data-[active=true]:font-semibold data-[active=true]:text-white">
+                                            <SidebarMenuButton
+                                                asChild
+                                                isActive={isActive}
+                                                tooltip={item.title}
+                                                className="text-emerald-100/70 hover:bg-[#083e2c] hover:text-white data-[active=true]:bg-[#0d533d] data-[active=true]:font-semibold data-[active=true]:text-white"
+                                            >
                                                 {item.href === '#' ? (
-                                                    <button type="button" onClick={() => undefined}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            undefined
+                                                        }
+                                                    >
                                                         <Icon />
-                                                        <span>{item.title}</span>
+                                                        <span>
+                                                            {item.title}
+                                                        </span>
                                                     </button>
                                                 ) : (
-                                                    <Link href={item.href} prefetch>
+                                                    <Link
+                                                        href={item.href}
+                                                        prefetch
+                                                    >
                                                         <Icon />
-                                                        <span>{item.title}</span>
+                                                        <span>
+                                                            {item.title}
+                                                        </span>
                                                     </Link>
                                                 )}
                                             </SidebarMenuButton>
@@ -127,8 +160,12 @@ export function AppSidebar() {
                                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                             </div>
                             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-                                <p className="truncate text-xs font-bold text-white">{user?.name || 'Sabo, Kim RPh'}</p>
-                                <p className="truncate text-[10px] text-emerald-200/60">{user?.role || 'CHO Pharmacist'}</p>
+                                <p className="truncate text-xs font-bold text-white">
+                                    {user?.name || 'Sabo, Kim RPh'}
+                                </p>
+                                <p className="truncate text-[10px] text-emerald-200/60">
+                                    {user?.role || 'CHO Pharmacist'}
+                                </p>
                             </div>
                         </div>
                     </SidebarMenuItem>

@@ -35,5 +35,17 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('expiry-risk');
     })->name('expiry-risk');
 
+    Route::get('/procurement', function () {
+        return Inertia::render('procurement');
+    })->name('procurement');
+
+    Route::get('/stockmanagement', function () {
+        return Inertia::render('stockmanagement');
+    })->name('stockmanagement');
+
+    Route::get('/reports', function () {
+        return Inertia::render('reports');
+    })->name('reports');
+
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
