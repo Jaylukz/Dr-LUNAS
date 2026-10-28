@@ -1,152 +1,301 @@
-import { useState, ReactNode } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 import { Head } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import '../../css/dashboard.css';
 import '../../css/expiry-risk.css';
 
+type BatchStatus = 'CRITICAL' | 'AT RISK' | 'SAFE' | 'EXPIRED';
+type SortKey = 'medicineName' | 'stock' | 'expiryDate';
+type SortDir = 'asc' | 'desc';
+
 interface BatchItem {
     id: string;
     medicineName: string;
     batchNo: string;
-    stock: string;
-    expiryDate: string;
-    status: 'CRITICAL' | 'AT RISK' | 'SAFE' | 'EXPIRED';
+    stock: number;
+    unit: string;
+    expiryDate: string; // YYYY-MM-DD
+    status: BatchStatus;
 }
 
-const mockBatches: BatchItem[] = [
-    {
-        id: '1',
-        medicineName: 'Paracetamol 500mg Tab',
-        batchNo: '#PCT-8812',
-        stock: '1,800 tabs',
-        expiryDate: 'Oct 15, 2026',
-        status: 'CRITICAL',
-    },
-    {
-        id: '2',
-        medicineName: 'Amoxicillin 500mg Cap',
-        batchNo: '#AMX-4410',
-        stock: '1,800 caps',
-        expiryDate: 'Nov 02, 2026',
-        status: 'AT RISK',
-    },
-    {
-        id: '3',
-        medicineName: 'Salbutamol 2mg Syrup',
-        batchNo: '#SLB-1092',
-        stock: '1,800 btls',
-        expiryDate: 'Dec 10, 2027',
-        status: 'SAFE',
-    },
-    {
-        id: '4',
-        medicineName: 'Doxycycline 100mg',
-        batchNo: '#DOX-1092',
-        stock: '30 caps',
-        expiryDate: 'Sep 01, 2026',
-        status: 'EXPIRED',
-    },
-];
+interface ProjectionPoint {
+    month: string;
+    units: number;
+}
+
+interface ExpiryData {
+    batches: BatchItem[];
+    projection: ProjectionPoint[];
+    fefoPreservedUnits: number | null;
+}
+
+const EMPTY_DATA: ExpiryData = {
+    batches: [],
+    projection: [],
+    fefoPreservedUnits: null,
+};
+
+// TODO: replace with a real API request, e.g. axios.get('/api/expiry-risk').
+async function fetchExpiryData(): Promise<ExpiryData> {
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return EMPTY_DATA;
+}
+
+function useExpiryData() {
+    const [data, setData] = useState<ExpiryData | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchExpiryData().then((result) => {
+            if (!cancelled) setData(result);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    return { data, loading: data === null };
+}
+
+const DASH = '—';
+
+const STATUS_TEXT: Record<BatchStatus, string> = {
+    CRITICAL: 'text-[#DC2626]',
+    'AT RISK': 'text-[#D97706]',
+    SAFE: 'text-[#16A34A]',
+    EXPIRED: 'text-[#374151]',
+};
+
+const parseDate = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+
+const fmtDate = (iso: string) =>
+    parseDate(iso).toLocaleDateString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+    });
+
+const sumStock = (list: BatchItem[]) =>
+    list.reduce((sum, b) => sum + b.stock, 0);
+
+const toggleIn = (set: Set<string>, id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+};
+
+function Skeleton({ className = '' }: { className?: string }) {
+    return (
+        <div
+            className={`animate-pulse rounded-md bg-slate-200/80 ${className}`}
+        />
+    );
+}
+
+function EmptyState({ title, hint }: { title: string; hint?: ReactNode }) {
+    return (
+        <div className="flex h-full w-full flex-col items-center justify-center px-4 text-center">
+            <div className="text-xs font-semibold text-slate-500">{title}</div>
+            {hint && (
+                <div className="mt-0.5 text-[11px] text-slate-400">{hint}</div>
+            )}
+        </div>
+    );
+}
+
+function StatCard({
+    dot,
+    label,
+    value,
+    note,
+}: {
+    dot: string;
+    label: string;
+    value: ReactNode;
+    note: string;
+}) {
+    return (
+        <div className="expiry-stat-card">
+            <div className="mb-1 flex items-center gap-2">
+                <span
+                    className={`inline-block shrink-0 rounded-full ${dot}`}
+                    style={{ width: '10px', height: '10px' }}
+                />
+                <span className="text-xs font-semibold text-slate-500">
+                    {label}
+                </span>
+            </div>
+            <div className="text-2xl font-black text-slate-900">{value}</div>
+            <p className="mt-0.5 text-[11px] text-slate-400">{note}</p>
+        </div>
+    );
+}
 
 export default function ExpiryRisk() {
     const [searchTerm, setSearchTerm] = useState('');
-    const [riskFilter, setRiskFilter] = useState('All');
-
-    const filteredBatches = mockBatches.filter((batch) => {
-        const matchesSearch =
-            batch.medicineName
-                .toLowerCase()
-                .includes(searchTerm.toLowerCase()) ||
-            batch.batchNo.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesRisk =
-            riskFilter === 'All' ||
-            batch.status.toLowerCase() === riskFilter.toLowerCase();
-        return matchesSearch && matchesRisk;
+    const [riskFilter, setRiskFilter] = useState<BatchStatus | 'All'>('All');
+    const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+        key: 'expiryDate',
+        dir: 'asc',
     });
+    const [fefoSet, setFefoSet] = useState<Set<string>>(new Set());
+    const [quarantined, setQuarantined] = useState<Set<string>>(new Set());
+    const { data, loading } = useExpiryData();
+
+    const d = data ?? EMPTY_DATA;
+    const all = d.batches;
+    const hasBatches = all.length > 0;
+    const hasProjection = d.projection.length > 0;
+    const controlsOff = loading || !hasBatches;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysUntil = (iso: string) =>
+        Math.ceil((parseDate(iso).getTime() - today.getTime()) / 86_400_000);
+
+    const live = all.filter((b) => b.status !== 'EXPIRED');
+    const within30 = live.filter((b) => {
+        const days = daysUntil(b.expiryDate);
+        return days >= 0 && days <= 30;
+    });
+    const within90 = live.filter((b) => {
+        const days = daysUntil(b.expiryDate);
+        return days > 30 && days <= 90;
+    });
+    const flaggedCount = within30.length + within90.length;
+    const units = (n: number) => `${n.toLocaleString()} Units`;
+
+    const primary = [...all]
+        .filter((b) => b.status === 'CRITICAL' || b.status === 'AT RISK')
+        .sort((a, b) => {
+            if (a.status !== b.status) return a.status === 'CRITICAL' ? -1 : 1;
+            return a.expiryDate.localeCompare(b.expiryDate);
+        })[0];
+    const primaryConfirmed = primary ? fefoSet.has(primary.id) : false;
+    const primaryDays = primary ? daysUntil(primary.expiryDate) : 0;
+
+    const proj = d.projection;
+    const maxUnits = hasProjection ? Math.max(...proj.map((p) => p.units)) : 0;
+    const peakIndex = proj.findIndex((p) => p.units === maxUnits);
+    const avgUnits = hasProjection
+        ? Math.round(proj.reduce((s, p) => s + p.units, 0) / proj.length)
+        : 0;
+    const prevUnits = proj.length > 1 ? proj[proj.length - 2].units : 0;
+    const trend =
+        proj.length > 1 && prevUnits > 0
+            ? ((proj[proj.length - 1].units - prevUnits) / prevUnits) * 100
+            : null;
+
+    const q = searchTerm.trim().toLowerCase();
+    const visible = all
+        .filter(
+            (b) =>
+                (b.medicineName.toLowerCase().includes(q) ||
+                    b.batchNo.toLowerCase().includes(q)) &&
+                (riskFilter === 'All' || b.status === riskFilter),
+        )
+        .sort((a, b) => {
+            const factor = sort.dir === 'asc' ? 1 : -1;
+            if (sort.key === 'stock') return (a.stock - b.stock) * factor;
+            return a[sort.key].localeCompare(b[sort.key]) * factor;
+        });
+
+    const toggleSort = (key: SortKey) =>
+        setSort((s) =>
+            s.key === key
+                ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+                : { key, dir: 'asc' },
+        );
+
+    const sortArrow = (key: SortKey) =>
+        sort.key === key ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+
+    const exportCsv = () => {
+        const header = ['Medicine', 'Batch #', 'Stock', 'Unit', 'Expiry Date', 'Status'];
+        const rows = visible.map((b) => [
+            b.medicineName,
+            b.batchNo,
+            b.stock,
+            b.unit,
+            b.expiryDate,
+            b.status,
+        ]);
+        const csv = [header, ...rows]
+            .map((row) =>
+                row
+                    .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+                    .join(','),
+            )
+            .join('\r\n');
+        const blob = new Blob(['\uFEFF' + csv], {
+            type: 'text/csv;charset=utf-8;',
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'batch-register.csv';
+        link.click();
+        URL.revokeObjectURL(url);
+    }; // prettier-ignore
+
+    const val = (value: string): ReactNode =>
+        loading ? <Skeleton className="h-7 w-24" /> : value;
 
     return (
         <>
-            <Head title="Dr-LUNAS - Expiry Risk" />
+            <Head title="Expiry Risk" />
 
             <main className="expiry-risk-container space-y-4">
-                {/* TOP STAT CARDS */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="expiry-stat-card">
-                        <div className="mb-1 flex items-center gap-2">
-                            <span
-                                className="inline-block shrink-0 rounded-full bg-[#DC2626]"
-                                style={{ width: '10px', height: '10px' }}
-                            />
-                            <span className="text-xs font-semibold text-slate-500">
-                                Total Expiring Volume
-                            </span>
-                        </div>
-                        <div className="text-2xl font-black text-slate-900">
-                            3,600 Units
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-slate-400">
-                            12 batches flagged
-                        </p>
-                    </div>
-
-                    <div className="expiry-stat-card">
-                        <div className="mb-1 flex items-center gap-2">
-                            <span
-                                className="inline-block shrink-0 rounded-full bg-[#D97706]"
-                                style={{ width: '10px', height: '10px' }}
-                            />
-                            <span className="text-xs font-semibold text-slate-500">
-                                Expiring 30 Days
-                            </span>
-                        </div>
-                        <div className="text-2xl font-black text-slate-900">
-                            1,800 Units
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-slate-400">
-                            Requires immediate action
-                        </p>
-                    </div>
-
-                    <div className="expiry-stat-card">
-                        <div className="mb-1 flex items-center gap-2">
-                            <span
-                                className="inline-block shrink-0 rounded-full bg-amber-400"
-                                style={{ width: '10px', height: '10px' }}
-                            />
-                            <span className="text-xs font-semibold text-slate-500">
-                                Expiring 31–90 Days
-                            </span>
-                        </div>
-                        <div className="text-2xl font-black text-slate-900">
-                            1,800 Units
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-slate-400">
-                            Scheduled for transfer
-                        </p>
-                    </div>
-
-                    <div className="expiry-stat-card">
-                        <div className="mb-1 flex items-center gap-2">
-                            <span
-                                className="inline-block shrink-0 rounded-full bg-[#16A34A]"
-                                style={{ width: '10px', height: '10px' }}
-                            />
-                            <span className="text-xs font-semibold text-slate-500">
-                                Preserved via FEFO
-                            </span>
-                        </div>
-                        <div className="text-2xl font-black text-slate-900">
-                            850 Units
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-slate-400">
-                            Dispensed successfully
-                        </p>
-                    </div>
+                    <StatCard
+                        dot="bg-[#DC2626]"
+                        label="Total Expiring Volume"
+                        value={val(
+                            hasBatches
+                                ? units(sumStock(within30) + sumStock(within90))
+                                : DASH,
+                        )}
+                        note={
+                            loading
+                                ? 'Loading…'
+                                : hasBatches
+                                  ? `${flaggedCount} batches flagged`
+                                  : 'No data yet'
+                        }
+                    />
+                    <StatCard
+                        dot="bg-[#D97706]"
+                        label="Expiring 30 Days"
+                        value={val(
+                            hasBatches ? units(sumStock(within30)) : DASH,
+                        )}
+                        note="Requires immediate action"
+                    />
+                    <StatCard
+                        dot="bg-amber-400"
+                        label="Expiring 31–90 Days"
+                        value={val(
+                            hasBatches ? units(sumStock(within90)) : DASH,
+                        )}
+                        note="Scheduled for transfer"
+                    />
+                    <StatCard
+                        dot="bg-[#16A34A]"
+                        label="Preserved via FEFO"
+                        value={val(
+                            d.fefoPreservedUnits === null
+                                ? DASH
+                                : units(d.fefoPreservedUnits),
+                        )}
+                        note="Dispensed successfully"
+                    />
                 </div>
 
-                {/* MIDDLE SECTION: PROJECTION CHART + PRIMARY DISPATCH NOTICE */}
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    {/* Expiration Projection Chart Card */}
                     <div className="expiry-card flex flex-col justify-between lg:col-span-2">
                         <div>
                             <div className="mb-1 flex items-center justify-between">
@@ -157,96 +306,73 @@ export default function ExpiryRisk() {
                                     <span className="flex items-center gap-1">
                                         <span
                                             className="inline-block rounded-xs bg-[#10B981]"
-                                            style={{
-                                                width: '8px',
-                                                height: '8px',
-                                            }}
+                                            style={{ width: '8px', height: '8px' }}
                                         />{' '}
                                         Normal
                                     </span>
                                     <span className="flex items-center gap-1">
                                         <span
                                             className="inline-block rounded-xs bg-[#DC2626]"
-                                            style={{
-                                                width: '8px',
-                                                height: '8px',
-                                            }}
+                                            style={{ width: '8px', height: '8px' }}
                                         />{' '}
                                         Peak Risk
                                     </span>
                                 </div>
                             </div>
                             <p className="mb-6 text-xs text-slate-400">
-                                Estimated loss risk (May – Oct 2026)
+                                {hasProjection
+                                    ? `Estimated loss risk (${proj[0].month} – ${proj[proj.length - 1].month})`
+                                    : 'Estimated loss risk by month'}
                             </p>
 
-                            {/* Bar Chart Representation */}
-                            <div className="flex h-36 items-end justify-between gap-3 border-b border-slate-100 px-4 pb-2">
-                                <div className="flex flex-1 flex-col items-center gap-2">
-                                    <div
-                                        className="w-full rounded-t-xs bg-[#10B981]"
-                                        style={{ height: '35%' }}
+                            {loading ? (
+                                <Skeleton className="h-36 w-full" />
+                            ) : !hasProjection ? (
+                                <div className="h-36 border-b border-slate-100">
+                                    <EmptyState
+                                        title="No projection data available"
+                                        hint="Estimated loss risk by month will appear here."
                                     />
-                                    <span className="text-[11px] font-medium text-slate-500">
-                                        May
-                                    </span>
                                 </div>
-                                <div className="flex flex-1 flex-col items-center gap-2">
-                                    <div
-                                        className="w-full rounded-t-xs bg-[#10B981]"
-                                        style={{ height: '50%' }}
-                                    />
-                                    <span className="text-[11px] font-medium text-slate-500">
-                                        Jun
-                                    </span>
+                            ) : (
+                                <div className="flex h-36 items-end justify-between gap-3 border-b border-slate-100 px-4 pb-2">
+                                    {proj.map((p, i) => (
+                                        <div
+                                            key={`${p.month}-${i}`}
+                                            className="group flex h-full flex-1 flex-col items-center justify-end gap-2"
+                                        >
+                                            <div className="flex w-full flex-1 items-end">
+                                                <div
+                                                    className={`relative w-full rounded-t-xs transition-opacity group-hover:opacity-80 ${i === peakIndex ? 'bg-[#DC2626]' : 'bg-[#10B981]'}`}
+                                                    style={{
+                                                        height: `${maxUnits > 0 ? (p.units / maxUnits) * 100 : 0}%`,
+                                                    }}
+                                                >
+                                                    <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold whitespace-nowrap text-white group-hover:block">
+                                                        {p.month}:{' '}
+                                                        {p.units.toLocaleString()}{' '}
+                                                        units
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span className="text-[11px] font-medium text-slate-500">
+                                                {p.month}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div className="flex flex-1 flex-col items-center gap-2">
-                                    <div
-                                        className="w-full rounded-t-xs bg-[#10B981]"
-                                        style={{ height: '65%' }}
-                                    />
-                                    <span className="text-[11px] font-medium text-slate-500">
-                                        Jul
-                                    </span>
-                                </div>
-                                <div className="flex flex-1 flex-col items-center gap-2">
-                                    <div
-                                        className="w-full rounded-t-xs bg-[#10B981]"
-                                        style={{ height: '75%' }}
-                                    />
-                                    <span className="text-[11px] font-medium text-slate-500">
-                                        Aug
-                                    </span>
-                                </div>
-                                <div className="flex flex-1 flex-col items-center gap-2">
-                                    <div
-                                        className="w-full rounded-t-xs bg-[#10B981]"
-                                        style={{ height: '85%' }}
-                                    />
-                                    <span className="text-[11px] font-medium text-slate-500">
-                                        Sep
-                                    </span>
-                                </div>
-                                <div className="flex flex-1 flex-col items-center gap-2">
-                                    <div
-                                        className="w-full rounded-t-xs bg-[#DC2626]"
-                                        style={{ height: '100%' }}
-                                    />
-                                    <span className="text-[11px] font-medium text-slate-500">
-                                        Oct
-                                    </span>
-                                </div>
-                            </div>
+                            )}
                         </div>
 
-                        {/* Projection Footer Metrics */}
                         <div className="mt-2 grid grid-cols-3 divide-x divide-slate-100 pt-3 text-center">
                             <div>
                                 <span className="text-[10px] font-semibold text-slate-400 uppercase">
                                     Monthly Avg
                                 </span>
                                 <p className="text-xs font-bold text-slate-800">
-                                    ~ 275 Units
+                                    {hasProjection
+                                        ? `~ ${avgUnits.toLocaleString()} Units`
+                                        : DASH}
                                 </p>
                             </div>
                             <div>
@@ -254,21 +380,26 @@ export default function ExpiryRisk() {
                                     Peak
                                 </span>
                                 <p className="text-xs font-bold text-[#DC2626]">
-                                    Oct (850 Units)
+                                    {hasProjection
+                                        ? `${proj[peakIndex].month} (${maxUnits.toLocaleString()} Units)`
+                                        : DASH}
                                 </p>
                             </div>
                             <div>
                                 <span className="text-[10px] font-semibold text-slate-400 uppercase">
                                     Trend
                                 </span>
-                                <p className="text-xs font-bold text-[#16A34A]">
-                                    +18% vs Prev
+                                <p
+                                    className={`text-xs font-bold ${trend === null ? 'text-slate-800' : trend >= 0 ? 'text-[#DC2626]' : 'text-[#16A34A]'}`}
+                                >
+                                    {trend === null
+                                        ? DASH
+                                        : `${trend >= 0 ? '+' : ''}${trend.toFixed(0)}% vs Prev`}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Primary Dispatch Notice Card */}
                     <div className="expiry-card flex flex-col justify-between">
                         <div>
                             <h2 className="text-sm font-bold text-slate-900">
@@ -279,84 +410,117 @@ export default function ExpiryRisk() {
                                 dispensing counters.
                             </p>
 
-                            <div className="mb-4 space-y-3 rounded-lg border border-slate-200/80 bg-slate-50/80 p-4">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <span className="block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                                            MEDICINE
-                                        </span>
-                                        <p className="text-xs font-bold text-slate-900">
-                                            Paracetamol 500mg
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <span className="block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                                            BATCH #
-                                        </span>
-                                        <p className="font-mono text-xs font-bold text-slate-800">
-                                            #PCT-8812
-                                        </p>
-                                    </div>
+                            {loading ? (
+                                <Skeleton className="mb-4 h-40 w-full" />
+                            ) : !primary ? (
+                                <div className="mb-4 h-40 rounded-lg border border-slate-200/80 bg-slate-50/80">
+                                    <EmptyState
+                                        title="No batch needs priority dispatch"
+                                        hint="Critical and at-risk batches will appear here."
+                                    />
                                 </div>
+                            ) : (
+                                <div className="mb-4 space-y-3 rounded-lg border border-slate-200/80 bg-slate-50/80 p-4">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <span className="block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                                                MEDICINE
+                                            </span>
+                                            <p className="text-xs font-bold text-slate-900">
+                                                {primary.medicineName}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                                                BATCH #
+                                            </span>
+                                            <p className="font-mono text-xs font-bold text-slate-800">
+                                                {primary.batchNo}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <span className="block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                                            STOCK LEFT
-                                        </span>
-                                        <p className="text-xs font-bold text-slate-800">
-                                            1,800 tabs
-                                        </p>
-                                        <p className="mt-1 text-xs font-bold text-[#DC2626]">
-                                            18 Days Left
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <span className="block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                                            EXPIRY
-                                        </span>
-                                        <p className="text-xs font-semibold text-slate-800">
-                                            Oct 15, 2026
-                                        </p>
-                                        <span className="mt-1 block text-xs font-bold text-[#DC2626]">
-                                            CRITICAL
-                                        </span>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <span className="block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                                                STOCK LEFT
+                                            </span>
+                                            <p className="text-xs font-bold text-slate-800">
+                                                {primary.stock.toLocaleString()}{' '}
+                                                {primary.unit}
+                                            </p>
+                                            <p
+                                                className={`mt-1 text-xs font-bold ${STATUS_TEXT[primary.status]}`}
+                                            >
+                                                {primaryDays < 0
+                                                    ? 'Past expiry date'
+                                                    : `${primaryDays} Days Left`}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                                                EXPIRY
+                                            </span>
+                                            <p className="text-xs font-semibold text-slate-800">
+                                                {fmtDate(primary.expiryDate)}
+                                            </p>
+                                            <span
+                                                className={`mt-1 block text-xs font-bold ${STATUS_TEXT[primary.status]}`}
+                                            >
+                                                {primary.status}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         <button
                             type="button"
-                            className="w-full cursor-pointer rounded-lg bg-[#012b1d] py-2.5 text-xs font-bold text-white transition hover:bg-[#065f46]"
+                            disabled={!primary || primaryConfirmed}
+                            onClick={() =>
+                                primary &&
+                                setFefoSet((s) => new Set(s).add(primary.id))
+                            }
+                            className="w-full cursor-pointer rounded-lg bg-[#012b1d] py-2.5 text-xs font-bold text-white transition hover:bg-[#065f46] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#012b1d]"
                         >
-                            Confirm FEFO Priority
+                            {primaryConfirmed
+                                ? 'FEFO Priority Confirmed ✓'
+                                : 'Confirm FEFO Priority'}
                         </button>
                     </div>
                 </div>
 
-                {/* BOTTOM SECTION: BATCH REGISTER TABLE */}
                 <div className="expiry-card">
                     <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
                         <h2 className="text-sm font-bold text-slate-900">
                             Batch Register
+                            {hasBatches && (
+                                <span className="ml-2 text-xs font-medium text-slate-400">
+                                    {visible.length} of {all.length}
+                                </span>
+                            )}
                         </h2>
 
                         <div className="flex items-center gap-2">
-                            {/* SEARCH INPUT (FIXED TEXT COLOR & FOCUS BG) */}
                             <input
                                 type="text"
                                 placeholder="Search batch # or medicine..."
                                 value={searchTerm}
+                                disabled={controlsOff}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-56 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#012b1d] focus:bg-white focus:outline-none"
+                                className="w-56 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#012b1d] focus:bg-white focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                             />
 
-                            {/* RISK FILTER SELECT */}
                             <select
                                 value={riskFilter}
-                                onChange={(e) => setRiskFilter(e.target.value)}
-                                className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:border-[#012b1d] focus:bg-white focus:outline-none"
+                                disabled={controlsOff}
+                                onChange={(e) =>
+                                    setRiskFilter(
+                                        e.target.value as BatchStatus | 'All',
+                                    )
+                                }
+                                className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:border-[#012b1d] focus:bg-white focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 <option value="All">Risk Level: All</option>
                                 <option value="CRITICAL">Critical</option>
@@ -367,7 +531,9 @@ export default function ExpiryRisk() {
 
                             <button
                                 type="button"
-                                className="cursor-pointer rounded-lg bg-[#012b1d] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#065f46]"
+                                disabled={controlsOff || visible.length === 0}
+                                onClick={exportCsv}
+                                className="cursor-pointer rounded-lg bg-[#012b1d] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#065f46] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#012b1d]"
                             >
                                 Export CSV
                             </button>
@@ -378,119 +544,189 @@ export default function ExpiryRisk() {
                         <table className="batch-register-table">
                             <thead>
                                 <tr>
-                                    <th>MEDICINE NAME & STRENGTH</th>
-                                    <th>BATCH #</th>
-                                    <th>STOCK</th>
-                                    <th>EXPIRY DATE</th>
-                                    <th>STATUS</th>
+                                    {(
+                                        [
+                                            ['medicineName', 'MEDICINE NAME & STRENGTH'],
+                                            [null, 'BATCH #'],
+                                            ['stock', 'STOCK'],
+                                            ['expiryDate', 'EXPIRY DATE'],
+                                            [null, 'STATUS'],
+                                        ] as const
+                                    ).map(([key, label]) => (
+                                        <th key={label}>
+                                            {key ? (
+                                                <button
+                                                    type="button"
+                                                    disabled={controlsOff}
+                                                    onClick={() => toggleSort(key)}
+                                                    className="cursor-pointer text-left font-[inherit] tracking-[inherit] uppercase hover:text-slate-900 disabled:cursor-not-allowed"
+                                                >
+                                                    {label}
+                                                    {sortArrow(key)}
+                                                </button>
+                                            ) : (
+                                                label
+                                            )}
+                                        </th>
+                                    ))}
                                     <th className="text-right">ACTION</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredBatches.map((batch) => {
-                                    const isExpired =
-                                        batch.status === 'EXPIRED';
-
-                                    return (
-                                        <tr
-                                            key={batch.id}
-                                            className="hover:bg-slate-50/80"
-                                        >
-                                            <td
-                                                className={`font-bold ${isExpired ? 'text-slate-400 line-through' : 'text-slate-900'}`}
-                                            >
-                                                {batch.medicineName}
-                                            </td>
-
-                                            <td
-                                                className={`font-mono ${isExpired ? 'text-slate-300' : 'text-slate-600'}`}
-                                            >
-                                                {batch.batchNo}
-                                            </td>
-
-                                            <td
-                                                className={
-                                                    isExpired
-                                                        ? 'text-slate-300'
-                                                        : 'text-slate-700'
-                                                }
-                                            >
-                                                {batch.stock}
-                                            </td>
-
-                                            <td
-                                                className={
-                                                    isExpired
-                                                        ? 'text-slate-300'
-                                                        : 'text-slate-700'
-                                                }
-                                            >
-                                                {batch.expiryDate}
-                                            </td>
-
-                                            <td className="font-bold tracking-wide">
-                                                {batch.status ===
-                                                    'CRITICAL' && (
-                                                    <span className="text-[#DC2626]">
-                                                        CRITICAL
-                                                    </span>
-                                                )}
-                                                {batch.status === 'AT RISK' && (
-                                                    <span className="text-[#D97706]">
-                                                        AT RISK
-                                                    </span>
-                                                )}
-                                                {batch.status === 'SAFE' && (
-                                                    <span className="text-[#16A34A]">
-                                                        SAFE
-                                                    </span>
-                                                )}
-                                                {batch.status === 'EXPIRED' && (
-                                                    <span className="text-[#374151]">
-                                                        EXPIRED
-                                                    </span>
-                                                )}
-                                            </td>
-
-                                            <td className="text-right">
-                                                {batch.status ===
-                                                    'CRITICAL' && (
-                                                    <button
-                                                        type="button"
-                                                        className="cursor-pointer rounded-md bg-[#DC2626] px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700"
-                                                    >
-                                                        Set FEFO
-                                                    </button>
-                                                )}
-                                                {batch.status === 'AT RISK' && (
-                                                    <button
-                                                        type="button"
-                                                        className="cursor-pointer rounded-md bg-[#D97706] px-3 py-1 text-xs font-semibold text-white transition hover:bg-amber-700"
-                                                    >
-                                                        Set FEFO
-                                                    </button>
-                                                )}
-                                                {batch.status === 'SAFE' && (
-                                                    <button
-                                                        type="button"
-                                                        disabled
-                                                        className="cursor-default rounded-md bg-[#E2E8F0] px-3 py-1 text-xs font-semibold text-[#64748B]"
-                                                    >
-                                                        Normal Queue
-                                                    </button>
-                                                )}
-                                                {batch.status === 'EXPIRED' && (
-                                                    <button
-                                                        type="button"
-                                                        className="cursor-pointer rounded-md bg-[#DC2626] px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700"
-                                                    >
-                                                        Quarantine
-                                                    </button>
-                                                )}
-                                            </td>
+                                {loading ? (
+                                    Array.from({ length: 4 }).map((_, i) => (
+                                        <tr key={i} aria-busy="true">
+                                            {Array.from({ length: 6 }).map(
+                                                (__, j) => (
+                                                    <td key={j}>
+                                                        <Skeleton className="h-4 w-full max-w-32" />
+                                                    </td>
+                                                ),
+                                            )}
                                         </tr>
-                                    );
-                                })}
+                                    ))
+                                ) : visible.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="h-40">
+                                            {hasBatches ? (
+                                                <EmptyState
+                                                    title="No batches match your filters"
+                                                    hint={
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSearchTerm('');
+                                                                setRiskFilter('All');
+                                                            }}
+                                                            className="cursor-pointer font-semibold text-emerald-700 hover:text-emerald-900"
+                                                        >
+                                                            Clear filters
+                                                        </button>
+                                                    }
+                                                />
+                                            ) : (
+                                                <EmptyState
+                                                    title="No batches available"
+                                                    hint="Batch records will appear here once inventory data is available."
+                                                />
+                                            )}
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    visible.map((batch) => {
+                                        const isExpired =
+                                            batch.status === 'EXPIRED';
+                                        const isFefo = fefoSet.has(batch.id);
+                                        const isQuarantined = quarantined.has(
+                                            batch.id,
+                                        );
+
+                                        return (
+                                            <tr
+                                                key={batch.id}
+                                                className="hover:bg-slate-50/80"
+                                            >
+                                                <td
+                                                    className={`font-bold ${isExpired ? 'text-slate-400 line-through' : 'text-slate-900'}`}
+                                                >
+                                                    {batch.medicineName}
+                                                </td>
+
+                                                <td
+                                                    className={`font-mono ${isExpired ? 'text-slate-300' : 'text-slate-600'}`}
+                                                >
+                                                    {batch.batchNo}
+                                                </td>
+
+                                                <td
+                                                    className={
+                                                        isExpired
+                                                            ? 'text-slate-300'
+                                                            : 'text-slate-700'
+                                                    }
+                                                >
+                                                    {batch.stock.toLocaleString()}{' '}
+                                                    {batch.unit}
+                                                </td>
+
+                                                <td
+                                                    className={
+                                                        isExpired
+                                                            ? 'text-slate-300'
+                                                            : 'text-slate-700'
+                                                    }
+                                                >
+                                                    {fmtDate(batch.expiryDate)}
+                                                </td>
+
+                                                <td className="font-bold tracking-wide">
+                                                    <span
+                                                        className={
+                                                            STATUS_TEXT[
+                                                                batch.status
+                                                            ]
+                                                        }
+                                                    >
+                                                        {batch.status}
+                                                    </span>
+                                                </td>
+
+                                                <td className="text-right">
+                                                    {batch.status === 'SAFE' ? (
+                                                        <button
+                                                            type="button"
+                                                            disabled
+                                                            className="cursor-default rounded-md bg-[#E2E8F0] px-3 py-1 text-xs font-semibold text-[#64748B]"
+                                                        >
+                                                            Normal Queue
+                                                        </button>
+                                                    ) : isExpired ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setQuarantined(
+                                                                    (s) =>
+                                                                        toggleIn(
+                                                                            s,
+                                                                            batch.id,
+                                                                        ),
+                                                                )
+                                                            }
+                                                            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-semibold transition ${isQuarantined ? 'bg-slate-200 text-slate-600 hover:bg-slate-300' : 'bg-[#DC2626] text-white hover:bg-red-700'}`}
+                                                        >
+                                                            {isQuarantined
+                                                                ? 'Quarantined ✓'
+                                                                : 'Quarantine'}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setFefoSet((s) =>
+                                                                    toggleIn(
+                                                                        s,
+                                                                        batch.id,
+                                                                    ),
+                                                                )
+                                                            }
+                                                            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-semibold transition ${
+                                                                isFefo
+                                                                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                                                    : batch.status === 'CRITICAL'
+                                                                      ? 'bg-[#DC2626] text-white hover:bg-red-700'
+                                                                      : 'bg-[#D97706] text-white hover:bg-amber-700'
+                                                            }`}
+                                                        >
+                                                            {isFefo
+                                                                ? 'FEFO Set ✓'
+                                                                : 'Set FEFO'}
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
