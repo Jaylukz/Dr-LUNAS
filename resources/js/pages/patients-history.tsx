@@ -1,4 +1,5 @@
-import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Head } from '@inertiajs/react';
 import {
     ChevronFirst,
@@ -12,26 +13,30 @@ import {
     X,
 } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
+import {
+    CARD,
+    PAGE_SIZES,
+    PAGER_BTN,
+    PatientFormDialog,
+    Overlay,
+    Skeleton,
+    TD,
+    TH,
+    TOOLBAR_INPUT,
+    ageOf,
+    fmt,
+    pageList,
+    type PatientRecord,
+} from '@/components/patients-shared';
 import '../../css/dashboard.css';
-
-interface PatientRecord {
-    id: number;
-    lastName: string;
-    firstName: string;
-    middleName: string | null;
-    ext: string | null;
-    birthdate: string;
-    contactNumber: string | null;
-    barangay: string;
-    recordDate: string;
-}
 
 interface DispenseRecord {
     id: number;
-    date: string;
+    dispensedAt: string;
     medicine: string;
+    batchNo: string;
     quantity: string;
-    releasedBy: string;
+    dispensedBy: string;
 }
 
 interface PatientsData {
@@ -62,6 +67,7 @@ async function fetchPatientsData(): Promise<PatientsData> {
 }
 
 // TODO: replace with a real API request, e.g. axios.get(`/api/patients/${id}/history`).
+// `dispensedAt` is an ISO date-time such as '2026-09-09T10:15:00'; `quantity` is text such as '21 caps'.
 async function fetchPatientHistory(_patientId: number): Promise<DispenseRecord[]> {
     await new Promise((resolve) => setTimeout(resolve, 600));
     return [];
@@ -92,367 +98,18 @@ const COLUMNS: { key: SortKey; label: string }[] = [
     { key: 'barangay', label: 'Barangay' },
 ];
 
-const EXTENSIONS = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
-const PAGE_SIZES = [10, 25, 50, 100];
-
-// Tagum City barangays — please verify against the CHO's official list.
-const BARANGAYS = [
-    'Apokon',
-    'Bincungan',
-    'Busaon',
-    'Canocotan',
-    'Cuambogan',
-    'La Filipina',
-    'Liboganon',
-    'Madaum',
-    'Magdum',
-    'Magugpo East',
-    'Magugpo North',
-    'Magugpo Poblacion',
-    'Magugpo South',
-    'Magugpo West',
-    'Mankilam',
-    'New Balamban',
-    'Nueva Fuerza',
-    'Pagsabangan',
-    'Pandapan',
-    'San Agustin',
-    'San Isidro',
-    'San Miguel',
-    'Visayan Village',
-];
-
-const fmt = (n: number) => n.toLocaleString('en-US');
-
-const todayIso = () => {
-    const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
-
-const ageOf = (iso: string) => {
-    const born = new Date(`${iso}T00:00:00`);
-    const now = new Date();
-    let age = now.getFullYear() - born.getFullYear();
-    const beforeBirthday =
-        now.getMonth() < born.getMonth() ||
-        (now.getMonth() === born.getMonth() && now.getDate() < born.getDate());
-    if (beforeBirthday) age -= 1;
-    return Math.max(0, age);
-};
-
-const fmtDate = (iso: string) =>
-    new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
+const fmtDay = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', {
         month: 'short',
         day: '2-digit',
         year: 'numeric',
     });
 
-function pageList(current: number, total: number): (number | 'gap')[] {
-    const wanted = new Set(
-        [1, 2, 3, total, current - 1, current, current + 1].filter(
-            (n) => n >= 1 && n <= total,
-        ),
-    );
-    const sorted = [...wanted].sort((a, b) => a - b);
-    const out: (number | 'gap')[] = [];
-    sorted.forEach((n, i) => {
-        if (i > 0 && n - sorted[i - 1] > 1) out.push('gap');
-        out.push(n);
+const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
     });
-    return out;
-}
-
-const CARD = 'rounded-xl border border-emerald-200 bg-white shadow-sm';
-const TH =
-    'h-[38px] whitespace-nowrap border-b border-slate-200 bg-slate-50/60 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500';
-const TD =
-    'h-[53px] whitespace-nowrap border-b border-slate-100 px-3 text-left text-[13px] uppercase';
-const INPUT =
-    'h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-700 placeholder:text-slate-400 focus:border-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-800/20 focus:outline-none';
-const TOOLBAR_INPUT =
-    'h-9 rounded-lg border border-slate-200 bg-slate-100/70 px-3 text-[13px] font-semibold text-slate-700 focus:border-emerald-800 focus:ring-2 focus:ring-emerald-800/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60';
-const PAGER_BTN =
-    'grid size-8 cursor-pointer place-items-center rounded-md text-[13px] font-medium text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
-
-function Skeleton({ className = '' }: { className?: string }) {
-    return (
-        <div
-            className={`animate-pulse rounded-md bg-slate-200/80 ${className}`}
-        />
-    );
-}
-
-function Field({
-    label,
-    error,
-    children,
-}: {
-    label: string;
-    error?: string;
-    children: ReactNode;
-}) {
-    return (
-        <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-                {label}
-            </span>
-            {children}
-            {error && (
-                <span className="mt-1 block text-[11px] font-medium text-red-600">
-                    {error}
-                </span>
-            )}
-        </label>
-    );
-}
-
-function Dialog({
-    title,
-    wide,
-    onClose,
-    children,
-}: {
-    title: string;
-    wide?: boolean;
-    onClose: () => void;
-    children: ReactNode;
-}) {
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
-
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
-            onMouseDown={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
-        >
-            <div
-                role="dialog"
-                aria-modal="true"
-                aria-label={title}
-                className={`${CARD} max-h-[90vh] w-full overflow-y-auto p-5 ${wide ? 'max-w-2xl' : 'max-w-lg'}`}
-            >
-                <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-sm font-bold">{title}</h2>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        aria-label="Close"
-                        className="cursor-pointer rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                    >
-                        <X className="size-4" />
-                    </button>
-                </div>
-                {children}
-            </div>
-        </div>
-    );
-}
-
-interface PatientForm {
-    lastName: string;
-    firstName: string;
-    middleName: string;
-    ext: string;
-    birthdate: string;
-    contactNumber: string;
-    barangay: string;
-}
-
-type FormErrors = Partial<Record<keyof PatientForm, string>>;
-
-const toForm = (p: PatientRecord | null): PatientForm => ({
-    lastName: p?.lastName ?? '',
-    firstName: p?.firstName ?? '',
-    middleName: p?.middleName ?? '',
-    ext: p?.ext ?? '',
-    birthdate: p?.birthdate ?? '',
-    contactNumber: p?.contactNumber ?? '',
-    barangay: p?.barangay ?? '',
-});
-
-const sameText = (a: string | null, b: string) =>
-    (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
-
-function PatientFormDialog({
-    patient,
-    existing,
-    onClose,
-    onSave,
-}: {
-    patient: PatientRecord | null;
-    existing: PatientRecord[];
-    onClose: () => void;
-    onSave: (record: PatientRecord) => void;
-}) {
-    const [form, setForm] = useState<PatientForm>(toForm(patient));
-    const [errors, setErrors] = useState<FormErrors>({});
-    const firstField = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        firstField.current?.focus();
-    }, []);
-
-    const set = (key: keyof PatientForm, value: string) => {
-        setForm((f) => ({ ...f, [key]: value }));
-        setErrors((e) => ({ ...e, [key]: undefined }));
-    };
-
-    const submit = (e: FormEvent) => {
-        e.preventDefault();
-        const next: FormErrors = {};
-        const contact = form.contactNumber.replace(/[\s-]/g, '');
-
-        if (!form.lastName.trim()) next.lastName = 'Enter the last name.';
-        if (!form.firstName.trim()) next.firstName = 'Enter the first name.';
-        if (!form.birthdate) next.birthdate = 'Pick the birthdate.';
-        else if (form.birthdate > todayIso())
-            next.birthdate = 'Birthdate cannot be in the future.';
-        if (contact && !/^09\d{9}$/.test(contact))
-            next.contactNumber = 'Use the format 09XXXXXXXXX.';
-        if (!form.barangay.trim()) next.barangay = 'Enter the barangay.';
-
-        if (Object.keys(next).length === 0) {
-            const duplicate = existing.some(
-                (p) =>
-                    p.id !== patient?.id &&
-                    sameText(p.lastName, form.lastName) &&
-                    sameText(p.firstName, form.firstName) &&
-                    sameText(p.middleName, form.middleName) &&
-                    p.birthdate === form.birthdate,
-            );
-            if (duplicate)
-                next.lastName =
-                    'A patient with the same name and birthdate already exists.';
-        }
-
-        setErrors(next);
-        if (Object.keys(next).length > 0) return;
-
-        onSave({
-            id: patient?.id ?? 0,
-            lastName: form.lastName.trim().toUpperCase(),
-            firstName: form.firstName.trim().toUpperCase(),
-            middleName: form.middleName.trim().toUpperCase() || null,
-            ext: form.ext || null,
-            birthdate: form.birthdate,
-            contactNumber: contact || null,
-            barangay: form.barangay.trim().toUpperCase(),
-            recordDate: patient?.recordDate ?? todayIso(),
-        });
-    };
-
-    return (
-        <Dialog
-            title={patient ? 'Edit Patient Record' : 'New Patient Record'}
-            onClose={onClose}
-        >
-            <form onSubmit={submit} noValidate>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Field label="Last name" error={errors.lastName}>
-                        <input
-                            ref={firstField}
-                            value={form.lastName}
-                            onChange={(e) => set('lastName', e.target.value)}
-                            className={INPUT}
-                        />
-                    </Field>
-                    <Field label="First name" error={errors.firstName}>
-                        <input
-                            value={form.firstName}
-                            onChange={(e) => set('firstName', e.target.value)}
-                            className={INPUT}
-                        />
-                    </Field>
-                    <Field label="Middle name (optional)">
-                        <input
-                            value={form.middleName}
-                            onChange={(e) => set('middleName', e.target.value)}
-                            className={INPUT}
-                        />
-                    </Field>
-                    <Field label="Ext. (optional)">
-                        <select
-                            value={form.ext}
-                            onChange={(e) => set('ext', e.target.value)}
-                            className={`${INPUT} cursor-pointer`}
-                        >
-                            <option value="">None</option>
-                            {EXTENSIONS.map((x) => (
-                                <option key={x}>{x}</option>
-                            ))}
-                        </select>
-                    </Field>
-                    <Field label="Birthdate" error={errors.birthdate}>
-                        <input
-                            type="date"
-                            max={todayIso()}
-                            value={form.birthdate}
-                            onChange={(e) => set('birthdate', e.target.value)}
-                            className={INPUT}
-                        />
-                    </Field>
-                    <Field
-                        label="Contact number (optional)"
-                        error={errors.contactNumber}
-                    >
-                        <input
-                            type="tel"
-                            inputMode="tel"
-                            value={form.contactNumber}
-                            onChange={(e) =>
-                                set('contactNumber', e.target.value)
-                            }
-                            placeholder="09XXXXXXXXX"
-                            className={INPUT}
-                        />
-                    </Field>
-                    <div className="sm:col-span-2">
-                        <Field label="Barangay" error={errors.barangay}>
-                            <input
-                                list="barangay-options"
-                                value={form.barangay}
-                                onChange={(e) =>
-                                    set('barangay', e.target.value)
-                                }
-                                placeholder="Select or type a barangay"
-                                className={INPUT}
-                            />
-                            <datalist id="barangay-options">
-                                {BARANGAYS.map((b) => (
-                                    <option key={b} value={b} />
-                                ))}
-                            </datalist>
-                        </Field>
-                    </div>
-                </div>
-
-                <div className="mt-5 flex justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="h-8.5 cursor-pointer rounded-lg bg-slate-100 px-5 text-xs font-semibold text-slate-600 transition hover:bg-slate-200"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        className="h-8.5 cursor-pointer rounded-lg bg-[#043d2b] px-5 text-xs font-bold text-white transition hover:bg-[#012b1d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#043d2b]"
-                    >
-                        {patient ? 'Save Changes' : 'Add Record'}
-                    </button>
-                </div>
-            </form>
-        </Dialog>
-    );
-}
 
 function HistoryDialog({
     patient,
@@ -473,52 +130,73 @@ function HistoryDialog({
         };
     }, [patient.id]);
 
-    const fullName = [
-        patient.lastName + ',',
-        patient.firstName,
-        patient.middleName,
-        patient.ext,
-    ]
-        .filter(Boolean)
-        .join(' ');
+    const meta = [
+        ['Patient', `${patient.lastName}, ${patient.firstName}`],
+        ['ID', patient.patientNo ?? '—'],
+        ['Age', String(ageOf(patient.birthdate))],
+        ['Brgy', patient.barangay],
+    ] as const;
+
+    const TH_H =
+        'sticky top-0 h-12 whitespace-nowrap border-b border-slate-200 bg-white pr-4 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400';
+    const TD_H =
+        'h-[55px] whitespace-nowrap border-b border-slate-100 pr-4 text-[13px]';
 
     return (
-        <Dialog title="Patient History" wide onClose={onClose}>
-            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-sm font-bold text-emerald-900 uppercase">
-                    {fullName}
+        <Overlay
+            label="Patient dispensing history"
+            onClose={onClose}
+            className={`${CARD} flex max-h-[90vh] w-full max-w-195 flex-col overflow-hidden`}
+        >
+            <div className="px-6 pt-6 pb-4">
+                <div className="flex items-start justify-between gap-4">
+                    <h2 className="text-[15px] font-extrabold tracking-wider text-emerald-950 uppercase">
+                        Patient Dispensing History
+                    </h2>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Close"
+                        className="-mt-1 -mr-1 cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    >
+                        <X className="size-5" />
+                    </button>
                 </div>
-                <div className="mt-0.5 text-xs text-slate-500">
-                    {ageOf(patient.birthdate)} yrs · Born{' '}
-                    {fmtDate(patient.birthdate)} · Brgy. {patient.barangay}
-                </div>
+                <p className="mt-2 text-[13px] text-slate-500">
+                    {meta.map(([label, value], i) => (
+                        <span key={label}>
+                            {i > 0 && ' · '}
+                            {label}:{' '}
+                            <span className="font-medium text-slate-800 uppercase">
+                                {value}
+                            </span>
+                        </span>
+                    ))}
+                </p>
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-120 border-collapse text-left">
+            <div className="min-h-0 flex-1 overflow-auto border-t border-slate-200 px-6">
+                <table className="w-full min-w-155 border-collapse">
                     <thead>
-                        <tr className="border-b border-slate-200 text-[10.5px] font-semibold tracking-wider text-slate-400 uppercase">
-                            <th className="pr-2 pb-2 font-semibold">Date</th>
-                            <th className="pr-2 pb-2 font-semibold">
-                                Medicine
-                            </th>
-                            <th className="pr-2 pb-2 font-semibold">
-                                Quantity
-                            </th>
-                            <th className="pb-2 font-semibold">Released by</th>
+                        <tr>
+                            <th className={TH_H}>Date &amp; time</th>
+                            <th className={TH_H}>Medicine dispensed</th>
+                            <th className={TH_H}>Batch no.</th>
+                            <th className={TH_H}>Qty dispensed</th>
+                            <th className={TH_H}>Dispensed by</th>
                         </tr>
                     </thead>
                     <tbody>
                         {records === null ? (
-                            Array.from({ length: 3 }).map((_, i) => (
-                                <tr
-                                    key={i}
-                                    aria-busy="true"
-                                    className="border-b border-slate-100"
-                                >
+                            Array.from({ length: 4 }).map((_, i) => (
+                                <tr key={i} aria-busy="true">
+                                    <td className={TD_H}>
+                                        <Skeleton className="h-4 w-24" />
+                                        <Skeleton className="mt-1.5 h-3 w-12" />
+                                    </td>
                                     {Array.from({ length: 4 }).map((__, j) => (
-                                        <td key={j} className="h-11 pr-2">
-                                            <Skeleton className="h-4 w-24" />
+                                        <td key={j} className={TD_H}>
+                                            <Skeleton className="h-4 w-28" />
                                         </td>
                                     ))}
                                 </tr>
@@ -526,8 +204,8 @@ function HistoryDialog({
                         ) : records.length === 0 ? (
                             <tr>
                                 <td
-                                    colSpan={4}
-                                    className="h-40 text-center text-sm font-semibold text-slate-500"
+                                    colSpan={5}
+                                    className="h-48 text-center text-sm font-semibold text-slate-500"
                                 >
                                     No dispensing history recorded for this
                                     patient
@@ -535,25 +213,60 @@ function HistoryDialog({
                             </tr>
                         ) : (
                             records.map((r) => (
-                                <tr
-                                    key={r.id}
-                                    className="border-b border-slate-100 text-[13px] text-slate-700"
-                                >
-                                    <td className="h-11 pr-2 whitespace-nowrap">
-                                        {fmtDate(r.date)}
+                                <tr key={r.id}>
+                                    <td className={TD_H}>
+                                        <div className="font-medium text-slate-800">
+                                            {fmtDay(r.dispensedAt)}
+                                        </div>
+                                        <div className="text-[11px] text-slate-400">
+                                            {fmtTime(r.dispensedAt)}
+                                        </div>
                                     </td>
-                                    <td className="pr-2 font-semibold">
+                                    <td className={`${TD_H} text-slate-800`}>
                                         {r.medicine}
                                     </td>
-                                    <td className="pr-2">{r.quantity}</td>
-                                    <td>{r.releasedBy}</td>
+                                    <td className={`${TD_H} text-slate-400`}>
+                                        {r.batchNo}
+                                    </td>
+                                    <td
+                                        className={`${TD_H} font-bold text-emerald-900`}
+                                    >
+                                        {r.quantity}
+                                    </td>
+                                    <td className={`${TD_H} text-slate-800`}>
+                                        {r.dispensedBy}
+                                    </td>
                                 </tr>
                             ))
                         )}
                     </tbody>
                 </table>
             </div>
-        </Dialog>
+
+            <footer className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-4">
+                <span className="text-[13px] text-slate-400">
+                    {records === null ? (
+                        'Loading transaction records…'
+                    ) : (
+                        <>
+                            Showing{' '}
+                            <b className="font-bold text-slate-600">
+                                {records.length}
+                            </b>{' '}
+                            transaction{' '}
+                            {records.length === 1 ? 'record' : 'records'}
+                        </>
+                    )}
+                </span>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="h-9 cursor-pointer rounded-md border border-emerald-900 bg-white px-6 text-xs font-bold tracking-widest text-emerald-900 uppercase transition hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-900"
+                >
+                    Close
+                </button>
+            </footer>
+        </Overlay>
     );
 }
 
