@@ -9,6 +9,8 @@ const pageTitles: Record<string, string> = {
     '/procurement': 'Procurement',
     '/stockmanagement': 'Stock Management',
     '/reports': 'Reports',
+    '/patients-history': 'Patients History',
+    '/releasing': 'Releasing',
 };
 
 export function AppSidebarHeader({

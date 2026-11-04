@@ -47,5 +47,13 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('reports');
     })->name('reports');
 
+    Route::get('/patients-history', function () {
+        return Inertia::render('patients-history');
+    })->name('patients-history');
+
+    Route::get('/releasing', function () {
+        return Inertia::render('releasing');
+    })->name('releasing');
+
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
